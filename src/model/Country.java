@@ -14,6 +14,16 @@ public class Country {
         this.countryCode = countryCode;
     }
 
+    @Override
+    public String toString() {
+        return "Country{" +
+                "id='" + id + '\'' +
+                ", name='" + name + '\'' +
+                ", population=" + population +
+                ", countryCode='" + countryCode + '\'' +
+                '}';
+    }
+
     public String getId() {
         return id;
     }

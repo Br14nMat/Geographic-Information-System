@@ -15,6 +15,16 @@ public class City {
         this.population = population;
     }
 
+    @Override
+    public String toString() {
+        return "City{" +
+                "id='" + id + '\'' +
+                ", name='" + name + '\'' +
+                ", countryID='" + countryID + '\'' +
+                ", population=" + population +
+                '}';
+    }
+
     public String getId() {
         return id;
     }

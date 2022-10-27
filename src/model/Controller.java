@@ -4,7 +4,10 @@ import exception.CountryNotFoundException;
 import exception.InvalidFormatException;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Controller {
 
@@ -79,7 +82,136 @@ public class Controller {
     }
 
     public String listData(String command){
-        return "";
+
+        String data = "";
+        String[] parts = command.split(" VALUES ");
+
+
+
+        return data;
+
+    }
+
+    public List<Country> listCountries(String criteria){
+
+        List<Country> list = null;
+        String [] parts = criteria.split(" ");
+
+        if(criteria.isEmpty()) list = countries;
+
+        if(parts[0].equals("population")){
+
+            int number = Integer.parseInt(parts[2]);
+
+            if(parts[1].equals(">")){
+                list = countries.stream()
+                        .filter(country -> country.getPopulation() > number)
+                        .collect(Collectors.toList());
+            }else {
+                list = countries.stream()
+                        .filter(country -> country.getPopulation() > number)
+                        .collect(Collectors.toList());
+            }
+
+        }
+
+        if(parts[0].equals("id")){
+            list = countries.stream()
+                    .filter(country -> country.getId().equals(parts[2]))
+                    .collect(Collectors.toList());
+        }
+
+        if(parts[0].equals("name")){
+            list = countries.stream()
+                    .filter(country -> country.getName().equals(parts[2]))
+                    .collect(Collectors.toList());
+        }
+
+        if(parts[0].equals("countryCode")){
+            list = countries.stream()
+                    .filter(country -> country.getCountryCode().equals(parts[2]))
+                    .collect(Collectors.toList());
+        }
+
+        return list;
+
+    }
+
+    public List<City> listCities(String criteria){
+
+        List<City> list = null;
+        String [] parts = criteria.split(" ");
+
+        if(criteria.isEmpty()) list = cities;
+
+        if(parts[0].equals("population")){
+
+            int number = Integer.parseInt(parts[2]);
+
+            if(parts[1].equals(">")){
+                list = cities.stream().filter(e -> e.getPopulation() > number).collect(Collectors.toList());
+            }else {
+                list = cities.stream()
+                        .filter(city -> city.getPopulation() < number)
+                        .collect(Collectors.toList());
+            }
+
+            if(parts[0].equals("id")){
+                list = cities.stream()
+                        .filter(city -> city.getId().equals(parts[2]))
+                        .collect(Collectors.toList());
+            }
+
+
+        }
+
+        if(parts[0].equals("id")){
+            list = cities.stream()
+                    .filter(city -> city.getId().equals(parts[2]))
+                    .collect(Collectors.toList());
+        }
+
+        if(parts[0].equals("name")){
+            list = cities.stream()
+                    .filter(city -> city.getName().equals(parts[2]))
+                    .collect(Collectors.toList());
+        }
+
+        if(parts[0].equals("countryCode")){
+            list = cities.stream()
+                    .filter(city -> city.getCountryID().equals(parts[2]))
+                    .collect(Collectors.toList());
+        }
+
+        return list;
+
+    }
+
+    public List<Country> orderCountryData(List<Country> list, String orderBy){
+
+        if(orderBy.equals("id")) list.sort(Comparator.comparing(Country::getId));
+
+        if(orderBy.equals("name")) list.sort(Comparator.comparing(Country::getName));
+
+        if(orderBy.equals("population")) list.sort(Comparator.comparing(Country::getPopulation));
+
+        if(orderBy.equals("countryCode")) list.sort(Comparator.comparing(Country::getCountryCode));
+
+        return list;
+
+    }
+
+    public List<City> orderCityData(List<City> list, String orderBy){
+
+        if(orderBy.equals("id")) list.sort(Comparator.comparing(City::getId));
+
+        if(orderBy.equals("name")) list.sort(Comparator.comparing(City::getName));
+
+        if(orderBy.equals("countryID")) list.sort(Comparator.comparing(City::getCountryID));
+
+        if(orderBy.equals("population")) list.sort(Comparator.comparing(City::getPopulation));
+
+        return list;
     }
 
     public boolean validateInsert(String command) throws InvalidFormatException {
@@ -125,9 +257,9 @@ public class Controller {
 
         String [] parts = command.split(" WHERE ");
 
-        if(!parts[0].equals("SELECT * FROM countries")
-        && !parts[0].equals("SELECT * FROM cities")
-        && parts.length != 2 && parts.length != 1)
+        if(!parts[0].equals("SELECT * FROM countries") &&
+                !parts[0].equals("SELECT * FROM cities") &&
+                parts.length != 2 && parts.length != 1)
             throw new InvalidFormatException("Invalid select command");
 
         if(parts.length == 2){
@@ -135,7 +267,7 @@ public class Controller {
             String[] parameters = parts[1].split(" ");
 
             if(parameters.length != 3){
-                throw new InvalidFormatException("Incorrect parameter number");
+                throw new InvalidFormatException("Invalid condition");
             }
 
             if(!parameters[1].equals("=") && !parameters[1].equals(">") && !parameters[1].equals("<"))
@@ -149,8 +281,13 @@ public class Controller {
                         !parameters[0].equals("countryCode"))
                     throw new InvalidFormatException("Invalid comparator");
 
-                validateComparison(parameters, !parameters[0].equals("population"));
+                if(parameters[0].equals("population") && !isANumber(parameters[2]))
+                    throw new InvalidFormatException(parameters[2] + " is not a number");
 
+                if(!parameters[0].equals("population") && !isValidString(parameters[2]))
+                    throw new InvalidFormatException(parameters[2] + " is not a valid string");
+
+                validateComparison(parameters, !parameters[0].equals("population"));
 
             }
 
@@ -162,14 +299,48 @@ public class Controller {
                         !parameters[0].equals("population"))
                     throw new InvalidFormatException("Invalid comparator");
 
+                if(parameters[0].equals("population") && !isANumber(parameters[2]))
+                    throw new InvalidFormatException(parameters[2] + " is not a number");
+
+                if(!parameters[0].equals("population") && !isValidString(parameters[2]))
+                    throw new InvalidFormatException(parameters[2] + " is not a valid string");
+
                 validateComparison(parameters, !parameters[0].equals("population"));
 
             }
 
         }
 
+
         return isValid;
 
+    }
+    public boolean validateOrderBy(String command) throws InvalidFormatException {
+
+        boolean isValid = true;
+
+        String [] parts = command.split(" ORDER BY ");
+
+        if(parts.length != 2)
+            throw new InvalidFormatException("Invalid order by expression");
+
+        isValid = validateSelect(parts[0]);
+
+        if(parts[0].contains("countries") &&
+                !parts[1].equals("id") &&
+                !parts[1].equals("name") &&
+                !parts[1].equals("population") &&
+                !parts[1].equals("countryCode"))
+            throw new InvalidFormatException("Invalid order parameter");
+
+        if(parts[0].contains("cities") &&
+                !parts[1].equals("id") &&
+                !parts[1].equals("name") &&
+                !parts[1].equals("countryID") &&
+                !parts[1].equals("population"))
+            throw new InvalidFormatException("Invalid order parameter");
+
+        return isValid;
     }
 
     public boolean isValidString(String str){
