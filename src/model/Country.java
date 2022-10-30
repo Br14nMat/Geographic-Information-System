@@ -21,7 +21,7 @@ public class Country {
                 ", name='" + name + '\'' +
                 ", population=" + population +
                 ", countryCode='" + countryCode + '\'' +
-                '}';
+                "} \n";
     }
 
     public String getId() {

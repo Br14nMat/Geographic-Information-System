@@ -1,50 +1,61 @@
 package model;
 
+import com.google.gson.Gson;
 import exception.CountryNotFoundException;
+import exception.ExistingRecord;
 import exception.InvalidFormatException;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 public class Controller {
 
     private List<City> cities;
     private List<Country> countries;
+
+    public final String COUNTRIES_PATH = "db/countries.json";
+    public final String CITIES_PATH = "db/cities.json";
+
     public Controller(){
         cities = new ArrayList<>();
         countries = new ArrayList<>();
     }
 
-    public void executeCommand(String command) throws InvalidFormatException, CountryNotFoundException {
+    public String executeCommand(String command){
 
         String [] commandParts = command.split(" ");
+        String response = "";
 
-        switch (commandParts[0]){
+        try {
 
-            case "INSERT":
-                if(validateInsert(command)) registerData(command);
-                break;
-            case "SELECT":
+            if(commandParts[0].equals("INSERT") && validateInsert(command))
+                response = registerData(command);
 
-                break;
-            case "DELETE":
+            if(commandParts[0].equals("SELECT") && !command.contains("ORDER BY") && validateSelect(command))
+                response = listData(command);
 
-                break;
+            if(commandParts[0].equals("SELECT") && command.contains("ORDER BY") && validateOrderBy(command))
+                response = listData(command);
 
-            default:
-                break;
+            if(commandParts[0].equals("DELETE") && validateDelete(command))
+                response = deleteData(command);
 
+
+        } catch (InvalidFormatException | CountryNotFoundException | ExistingRecord e) {
+            response = e.getMessage();
         }
 
+        return response;
 
     }
 
-    public void registerData(String command) throws CountryNotFoundException {
+    public String registerData(String command) {
 
         String [] parts = command.split(" VALUES ");
+        String response = "";
 
         String aux = parts[1].substring(1, parts[1].length() - 1);
         aux =  aux.replace(", ", " ");
@@ -52,7 +63,7 @@ public class Controller {
 
         String[] parameters = aux.split(" ");
 
-        if(parts[1].contains("countries") && !countryRegistered(parameters[0])){
+        if(parts[0].contains("countries") && !countryRegistered(parameters[0])){
 
             countries.add(new Country(
                     parameters[0],
@@ -60,35 +71,88 @@ public class Controller {
                     Double.parseDouble(parameters[2]),
                     parameters[3]));
 
-        }
-
-        if(parts[1].contains("cities") && !cityRegistered(parameters[0])){
-
-            if(countryRegistered(parameters[2])){
-
-                cities.add(new City(
-                        parameters[0],
-                        parameters[1],
-                        parameters[2],
-                        Integer.parseInt(parameters[3])
-                ));
-
-            }else {
-                throw new CountryNotFoundException("Error 404: Country Not Found");
-            }
+            response = parameters[1] + " registered succesfully";
 
         }
+
+        if(parts[0].contains("cities") && !cityRegistered(parameters[0])){
+
+            cities.add(new City(
+                    parameters[0],
+                    parameters[1],
+                    parameters[2],
+                    Double.parseDouble(parameters[3])
+            ));
+
+            response = parameters[1] + " registered succesfully";
+
+        }
+
+        return response;
 
     }
 
     public String listData(String command){
+        command = command.replace("'", "");
 
-        String data = "";
-        String[] parts = command.split(" VALUES ");
+        StringBuilder data = new StringBuilder();
+        String[] order = command.split(" ORDER BY ");
+        String[] filter = order[0].split(" WHERE ");
 
+        if(command.contains("countries")){
+            List<Country> list = null;
 
+            if(filter.length == 2){
+                list = listCountries(filter[1]);
+            }else {
+                list = listCountries("");
+            }
 
-        return data;
+            if(order.length == 2){
+                list = orderCountryData(list, order[1]);
+            }
+
+            list.forEach(country -> data.append(country.toString()));
+
+        }
+
+        if(command.contains("cities")){
+
+            List<City> list = null;
+
+            if(filter.length == 2){
+                list = listCities(filter[1]);
+            }else {
+                list = listCities("");
+            }
+
+            if(order.length == 2){
+                list = orderCityData(list, order[1]);
+            }
+
+            list.forEach(city -> data.append(city.toString()));
+
+        }
+
+        return data.toString();
+
+    }
+
+    public String deleteData(String command) {
+        command = command.replace("'", "");
+
+        String[] parts = command.split(" WHERE ");
+        boolean deleted = false;
+
+        if(parts[0].contains("countries"))
+            deleted = deleteCountries(parts[1]);
+
+        if(parts[0].contains("cities"))
+            deleted = deleteCities(parts[1]);
+
+        return deleted
+                ? "Successfully deleted data"
+                : "No data was deleted";
 
     }
 
@@ -101,15 +165,23 @@ public class Controller {
 
         if(parts[0].equals("population")){
 
-            int number = Integer.parseInt(parts[2]);
+            double number = Double.parseDouble(parts[2]);
 
             if(parts[1].equals(">")){
                 list = countries.stream()
                         .filter(country -> country.getPopulation() > number)
                         .collect(Collectors.toList());
-            }else {
+            }
+
+            if(parts[1].equals("<")){
                 list = countries.stream()
-                        .filter(country -> country.getPopulation() > number)
+                        .filter(country -> country.getPopulation() < number)
+                        .collect(Collectors.toList());
+            }
+
+            if(parts[1].equals("=")){
+                list = countries.stream()
+                        .filter(country -> country.getPopulation() == number)
                         .collect(Collectors.toList());
             }
 
@@ -146,22 +218,25 @@ public class Controller {
 
         if(parts[0].equals("population")){
 
-            int number = Integer.parseInt(parts[2]);
+            double number = Double.parseDouble(parts[2]);
 
             if(parts[1].equals(">")){
-                list = cities.stream().filter(e -> e.getPopulation() > number).collect(Collectors.toList());
-            }else {
+                list = cities.stream()
+                        .filter(e -> e.getPopulation() > number)
+                        .collect(Collectors.toList());
+            }
+
+            if(parts[1].equals("<")){
                 list = cities.stream()
                         .filter(city -> city.getPopulation() < number)
                         .collect(Collectors.toList());
             }
 
-            if(parts[0].equals("id")){
+            if(parts[1].equals("=")){
                 list = cities.stream()
-                        .filter(city -> city.getId().equals(parts[2]))
+                        .filter(city -> city.getPopulation() == number)
                         .collect(Collectors.toList());
             }
-
 
         }
 
@@ -177,13 +252,80 @@ public class Controller {
                     .collect(Collectors.toList());
         }
 
-        if(parts[0].equals("countryCode")){
+        if(parts[0].equals("countryID")){
             list = cities.stream()
                     .filter(city -> city.getCountryID().equals(parts[2]))
                     .collect(Collectors.toList());
         }
 
         return list;
+
+    }
+
+    public boolean deleteCountries(String criteria){
+
+        String[] parts = criteria.split(" ");
+
+        boolean deleted = false;
+
+        if(parts[0].equals("population")){
+
+            double number = Double.parseDouble(parts[2]);
+
+            if(parts[1].equals(">"))
+                deleted = countries.removeIf(country -> country.getPopulation() > number);
+
+            if(parts[1].equals("<"))
+                deleted = countries.removeIf(country -> country.getPopulation() < number);
+
+            if(parts[1].equals("="))
+                deleted = countries.removeIf(country -> country.getPopulation() == number);
+
+        }
+
+        if(parts[0].equals("id"))
+            deleted = countries.removeIf(country -> country.getId().equals(parts[2]));
+
+        if(parts[0].equals("name"))
+            deleted = countries.removeIf(country -> country.getName().equals(parts[2]));
+
+        if(parts[0].equals("countryCode"))
+            deleted = countries.removeIf(country -> country.getCountryCode().equals(parts[2]));
+
+        return deleted;
+
+    }
+
+    public boolean deleteCities(String criteria){
+        String[] parts = criteria.split(" ");
+
+        boolean deleted = false;
+
+        if(parts[0].equals("population")){
+
+            double number = Double.parseDouble(parts[2]);
+
+            if(parts[1].equals(">"))
+                deleted = cities.removeIf(city -> city.getPopulation() > number);
+
+            if(parts[1].equals("<"))
+                deleted =  cities.removeIf(city -> city.getPopulation() < number);
+
+            if(parts[1].equals("="))
+                deleted = cities.removeIf(city -> city.getPopulation() == number);
+
+        }
+
+        if(parts[0].equals("id"))
+            deleted = cities.removeIf(city -> city.getId().equals(parts[2]));
+
+        if(parts[0].equals("name"))
+            deleted = cities.removeIf(city -> city.getName().equals(parts[2]));
+
+        if(parts[0].equals("countryID"))
+            deleted = cities.removeIf(city -> city.getCountryID().equals(parts[2]));
+
+        return deleted;
 
     }
 
@@ -213,16 +355,127 @@ public class Controller {
 
         return list;
     }
+    public String importData(String path){
 
-    public boolean validateInsert(String command) throws InvalidFormatException {
+        String response = "Data imported correctly";
+        List<Country> backUpCountries = new ArrayList<>(countries);
+        List<City> backUpCities = new ArrayList<>(cities);
+
+        int count = 1;
+        try{
+            File file = new File(path);
+
+            FileInputStream fis = new FileInputStream(file);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(fis));
+
+            String line;
+
+            while ((line = reader.readLine()) != null){
+                if(validateInsert(line)) registerData(line);
+                count++;
+            }
+
+        }catch (IOException e){
+            e.printStackTrace();
+        } catch (CountryNotFoundException | InvalidFormatException | ExistingRecord e) {
+            response = "Error in line " + count + ": " + e.getMessage();
+            countries = backUpCountries;
+            cities = backUpCities;
+        }
+
+        return response;
+
+    }
+    public void loadData(){
+        try {
+            File file = new File(COUNTRIES_PATH);
+
+            if(!file.exists()) return;
+
+            FileInputStream fis = new FileInputStream(file);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(fis));
+            StringBuilder countriesJSON = new StringBuilder();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                countriesJSON.append(line);
+            }
+            fis.close();
+
+            if(!countriesJSON.toString().isEmpty()){
+                Gson gson = new Gson();
+                Country [] countriesArr = gson.fromJson(countriesJSON.toString(), Country[].class);
+                countries.addAll(Arrays.asList(countriesArr));
+            }
+
+        }catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try{
+            File file = new File(CITIES_PATH);
+
+            if(!file.exists()) return;
+
+            FileInputStream fis = new FileInputStream(file);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(fis));
+            StringBuilder citiesJSON = new StringBuilder();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                citiesJSON.append(line);
+            }
+            fis.close();
+
+            if(!citiesJSON.toString().isEmpty()){
+                Gson gson = new Gson();
+                City [] citiesArr = gson.fromJson(citiesJSON.toString(), City[].class);
+                cities.addAll(Arrays.asList(citiesArr));
+            }
+
+
+        }catch (IOException e){
+            e.printStackTrace();
+        }
+
+    }
+    public void saveData(){
+
+        Gson gson = new Gson();
+
+        String countriesJSON = gson.toJson(countries);
+        String citiesJSON = gson.toJson(cities);
+
+        try {
+            FileOutputStream fos = new FileOutputStream(COUNTRIES_PATH);
+            fos.write(countriesJSON.getBytes(StandardCharsets.UTF_8));
+            fos.close();
+
+        }catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            FileOutputStream fos = new FileOutputStream(CITIES_PATH);
+            fos.write(citiesJSON.getBytes(StandardCharsets.UTF_8));
+            fos.close();
+
+        }catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean validateInsert(String command) throws InvalidFormatException, CountryNotFoundException, ExistingRecord {
 
         boolean isValid = false;
 
         String[] parts = command.split(" VALUES ");
 
-        if(!parts[0].equals("INSERT INTO countries(id, name, population, countryCode)") &&
-                !parts[0].equals("INSERT INTO cities(id, name, countryID, population)") &&
-                parts.length != 2)
+        if(parts.length != 2 &&
+                !parts[0].equals("INSERT INTO countries(id, name, population, countryCode)") &&
+                !parts[0].equals("INSERT INTO cities(id, name, countryID, population)"))
             throw new InvalidFormatException("Invalid insert command");
 
         if(!parts[1].startsWith("(") && !parts[1].endsWith(")"))
@@ -241,11 +494,28 @@ public class Controller {
                     isValidString(parameters[1]) &&
                     isANumber(parameters[2]) &&
                     isValidString(parameters[3]);
-        }else {
+
+            parameters[0] = parameters[0].replace("'", "");
+
+            if(countryRegistered(parameters[0]))
+                throw new ExistingRecord("There is already a country with this id");
+
+        }
+
+        if(parts[0].contains("cities")){
             isValid = isValidString(parameters[0]) &&
                     isValidString(parameters[1]) &&
                     isValidString(parameters[2]) &&
                     isANumber(parameters[3]);
+
+            parameters[2] = parameters[2].replace("'", "");
+            parameters[0] = parameters[0].replace("'", "");
+
+            if(!countryRegistered(parameters[2]))
+                throw new CountryNotFoundException("Error 404: Country not found");
+
+            if(cityRegistered(parameters[0]))
+                throw new ExistingRecord("There is already a city with this id");
         }
 
         return isValid;
@@ -257,9 +527,9 @@ public class Controller {
 
         String [] parts = command.split(" WHERE ");
 
-        if(!parts[0].equals("SELECT * FROM countries") &&
-                !parts[0].equals("SELECT * FROM cities") &&
-                parts.length != 2 && parts.length != 1)
+        if(parts.length != 2 && parts.length != 1 &&
+                !parts[0].equals("SELECT * FROM countries") &&
+                !parts[0].equals("SELECT * FROM cities"))
             throw new InvalidFormatException("Invalid select command");
 
         if(parts.length == 2){
@@ -273,41 +543,20 @@ public class Controller {
             if(!parameters[1].equals("=") && !parameters[1].equals(">") && !parameters[1].equals("<"))
                 throw new InvalidFormatException("Invalid operator");
 
-            if(parts[0].contains("countries")){
+            if(parameters[0].equals("population") && !isANumber(parameters[2]))
+                throw new InvalidFormatException(parameters[2] + " is not a number");
 
-                if(!parameters[0].equals("id") &&
-                        !parameters[0].equals("name") &&
-                        !parameters[0].equals("population") &&
-                        !parameters[0].equals("countryCode"))
-                    throw new InvalidFormatException("Invalid comparator");
+            if(!parameters[0].equals("population") && !isValidString(parameters[2]))
+                throw new InvalidFormatException(parameters[2] + " is not a valid string");
 
-                if(parameters[0].equals("population") && !isANumber(parameters[2]))
-                    throw new InvalidFormatException(parameters[2] + " is not a number");
+            if(parts[0].contains("countries") && !validateCountryParameter(parameters[0]))
+                throw new InvalidFormatException(parameters[0] + ": Invalid parameter");
 
-                if(!parameters[0].equals("population") && !isValidString(parameters[2]))
-                    throw new InvalidFormatException(parameters[2] + " is not a valid string");
+            if(parts[0].contains("cities") && !validateCityParameter(parameters[0]))
+                throw new InvalidFormatException(parameters[0] + ": Invalid parameter");
 
-                validateComparison(parameters, !parameters[0].equals("population"));
-
-            }
-
-            if(parts[0].contains("cities")){
-
-                if(!parameters[0].equals("id") &&
-                        !parameters[0].equals("name") &&
-                        !parameters[0].equals("countryID") &&
-                        !parameters[0].equals("population"))
-                    throw new InvalidFormatException("Invalid comparator");
-
-                if(parameters[0].equals("population") && !isANumber(parameters[2]))
-                    throw new InvalidFormatException(parameters[2] + " is not a number");
-
-                if(!parameters[0].equals("population") && !isValidString(parameters[2]))
-                    throw new InvalidFormatException(parameters[2] + " is not a valid string");
-
-                validateComparison(parameters, !parameters[0].equals("population"));
-
-            }
+            if(!validateComparison(parameters, !parameters[0].equals("population")))
+                throw new InvalidFormatException("Invalid " + parameters[0] + " comparision");
 
         }
 
@@ -315,6 +564,7 @@ public class Controller {
         return isValid;
 
     }
+
     public boolean validateOrderBy(String command) throws InvalidFormatException {
 
         boolean isValid = true;
@@ -343,6 +593,43 @@ public class Controller {
         return isValid;
     }
 
+    public boolean validateDelete(String command) throws InvalidFormatException {
+
+        boolean isValid = true;
+
+        String[] parts = command.split(" WHERE ");
+
+
+        if(parts.length != 2 &&
+                !parts[0].equals("DELETE FROM countries") &&
+                !parts[0].equals("DELETE FROM cities"))
+            throw new InvalidFormatException("Invalid delete command");
+
+
+        String [] parameters = parts[1].split(" ");
+
+        if(parameters.length != 3)
+            throw new InvalidFormatException("Incorrect parameter number");
+
+        if(parameters[0].equals("population") && !isANumber(parameters[2]))
+            throw new InvalidFormatException(parameters[2] + " is not a number");
+
+        if(!parameters[0].equals("population") && !isValidString(parameters[2]))
+            throw new InvalidFormatException(parameters[2] + " is not a valid string");
+
+        if(parts[0].contains("countries") && !validateCountryParameter(parameters[0]))
+            throw new InvalidFormatException(parameters[0] + ": Invalid parameter");
+
+        if(parts[0].contains("cities") && !validateCityParameter(parameters[0]))
+            throw new InvalidFormatException(parameters[0] + ": Invalid parameter");
+
+        if(!validateComparison(parameters, !parameters[0].equals("population")))
+            throw new InvalidFormatException("Invalid " + parameters[0] + " comparision");
+
+        return isValid;
+
+    }
+
     public boolean isValidString(String str){
         return str.startsWith("'") && str.endsWith("'");
     }
@@ -360,14 +647,31 @@ public class Controller {
         return isANumber;
     }
 
-    public void validateComparison(String [] parameters, boolean isString) throws InvalidFormatException {
+    public boolean validateComparison(String [] parameters, boolean isString) throws InvalidFormatException {
+
+        boolean isValid = true;
 
         if(isString && !parameters[1].equals("=") && !isValidString(parameters[2]))
-            throw new InvalidFormatException("Invalid " + parameters[0] + " comparision");
+            isValid = false;
 
-        if(!isString && !parameters[1].equals(">") && !parameters[1].equals("<") & !isANumber(parameters[2]))
-            throw new InvalidFormatException("Invalid " + parameters[0] + " comparision");
+        if(!isString && !isANumber(parameters[2]))
+            isValid = false;
 
+        return isValid;
+    }
+
+    public boolean validateCountryParameter(String parameter){
+        return parameter.equals("id") ||
+                parameter.equals("name") ||
+                parameter.equals("population") ||
+                parameter.equals("countryCode");
+    }
+
+    public boolean validateCityParameter(String parameter){
+        return parameter.equals("id") ||
+                parameter.equals("name") ||
+                parameter.equals("countryID") ||
+                parameter.equals("population");
     }
 
     public boolean countryRegistered(String id){
@@ -384,11 +688,18 @@ public class Controller {
 
         boolean flag = false;
 
-        for(int i = 0; i < countries.size() && !flag; i++)
+        for(int i = 0; i < cities.size() && !flag; i++)
             if(cities.get(i).getId().equals(id)) flag = true;
 
         return flag;
     }
 
+    public List<City> getCities() {
+        return cities;
+    }
+
+    public List<Country> getCountries() {
+        return countries;
+    }
 
 }
