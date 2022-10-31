@@ -62,7 +62,6 @@ public class Main {
 
         System.out.println("Insert the command");
         command = sc.nextLine();
-        sc.nextLine();
 
         String response = controller.executeCommand(command);
         System.out.println(response);
@@ -70,6 +69,8 @@ public class Main {
 
     public void importSQL(){
 
+        System.out.println("Running file chooser...");
+        System.out.println("Choose txt file");
         Chooser chooser = new Chooser();
         String path =  chooser.getPath();
 

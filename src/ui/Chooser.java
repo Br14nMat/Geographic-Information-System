@@ -7,13 +7,22 @@ import java.io.File;
 
 public class Chooser extends Component {
 
+    private JFileChooser fileChooser;
+
+    public Chooser(){
+        fileChooser = new JFileChooser();
+    }
 
     public String getPath(){
 
         String path = "";
 
-        JFileChooser fileChooser = new JFileChooser();
         fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+
+        File currentDirectory = new File("./");
+
+        if(currentDirectory.exists())
+            fileChooser.setCurrentDirectory(currentDirectory);
 
         FileNameExtensionFilter filter = new FileNameExtensionFilter("TXT", "txt");
         fileChooser.setFileFilter(filter);

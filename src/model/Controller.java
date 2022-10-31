@@ -16,8 +16,8 @@ public class Controller {
     private List<City> cities;
     private List<Country> countries;
 
-    public final String COUNTRIES_PATH = "db/countries.json";
-    public final String CITIES_PATH = "db/cities.json";
+    private final String COUNTRIES_PATH = "db/countries.json";
+    private final String CITIES_PATH = "db/cities.json";
 
     public Controller(){
         cities = new ArrayList<>();
@@ -34,15 +34,17 @@ public class Controller {
             if(commandParts[0].equals("INSERT") && validateInsert(command))
                 response = registerData(command);
 
-            if(commandParts[0].equals("SELECT") && !command.contains("ORDER BY") && validateSelect(command))
+            else if(commandParts[0].equals("SELECT") && !command.contains("ORDER BY") && validateSelect(command))
                 response = listData(command);
 
-            if(commandParts[0].equals("SELECT") && command.contains("ORDER BY") && validateOrderBy(command))
+            else if(commandParts[0].equals("SELECT") && command.contains("ORDER BY") && validateOrderBy(command))
                 response = listData(command);
 
-            if(commandParts[0].equals("DELETE") && validateDelete(command))
+            else if(commandParts[0].equals("DELETE") && validateDelete(command))
                 response = deleteData(command);
 
+            else
+                throw new InvalidFormatException("Command not found");
 
         } catch (InvalidFormatException | CountryNotFoundException | ExistingRecord e) {
             response = e.getMessage();
@@ -331,30 +333,35 @@ public class Controller {
 
     public List<Country> orderCountryData(List<Country> list, String orderBy){
 
-        if(orderBy.equals("id")) list.sort(Comparator.comparing(Country::getId));
+        List<Country> copy = new ArrayList<>(list);
 
-        if(orderBy.equals("name")) list.sort(Comparator.comparing(Country::getName));
+        if(orderBy.equals("id")) copy.sort(Comparator.comparing(Country::getId));
 
-        if(orderBy.equals("population")) list.sort(Comparator.comparing(Country::getPopulation));
+        if(orderBy.equals("name")) copy.sort(Comparator.comparing(Country::getName));
 
-        if(orderBy.equals("countryCode")) list.sort(Comparator.comparing(Country::getCountryCode));
+        if(orderBy.equals("population")) copy.sort(Comparator.comparing(Country::getPopulation));
 
-        return list;
+        if(orderBy.equals("countryCode")) copy.sort(Comparator.comparing(Country::getCountryCode));
+
+        return copy;
 
     }
 
     public List<City> orderCityData(List<City> list, String orderBy){
 
-        if(orderBy.equals("id")) list.sort(Comparator.comparing(City::getId));
+        List<City> copy = new ArrayList<>(list);
 
-        if(orderBy.equals("name")) list.sort(Comparator.comparing(City::getName));
+        if(orderBy.equals("id")) copy.sort(Comparator.comparing(City::getId));
 
-        if(orderBy.equals("countryID")) list.sort(Comparator.comparing(City::getCountryID));
+        if(orderBy.equals("name")) copy.sort(Comparator.comparing(City::getName));
 
-        if(orderBy.equals("population")) list.sort(Comparator.comparing(City::getPopulation));
+        if(orderBy.equals("countryID")) copy.sort(Comparator.comparing(City::getCountryID));
 
-        return list;
+        if(orderBy.equals("population")) copy.sort(Comparator.comparing(City::getPopulation));
+
+        return copy;
     }
+
     public String importData(String path){
 
         String response = "Data imported correctly";
@@ -386,6 +393,7 @@ public class Controller {
         return response;
 
     }
+
     public void loadData(){
         try {
             File file = new File(COUNTRIES_PATH);
@@ -441,6 +449,7 @@ public class Controller {
         }
 
     }
+
     public void saveData(){
 
         Gson gson = new Gson();
