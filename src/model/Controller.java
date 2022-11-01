@@ -8,7 +8,6 @@ import exception.InvalidFormatException;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 public class Controller {
@@ -22,6 +21,9 @@ public class Controller {
     public Controller(){
         cities = new ArrayList<>();
         countries = new ArrayList<>();
+        
+        loadData();
+
     }
 
     public String executeCommand(String command){
@@ -136,7 +138,9 @@ public class Controller {
 
         }
 
-        return data.toString();
+        return !data.toString().isEmpty()
+                ? data.toString()
+                : "No data available";
 
     }
 
@@ -656,7 +660,7 @@ public class Controller {
         return isANumber;
     }
 
-    public boolean validateComparison(String [] parameters, boolean isString) throws InvalidFormatException {
+    public boolean validateComparison(String [] parameters, boolean isString) {
 
         boolean isValid = true;
 
